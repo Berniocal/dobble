@@ -7,6 +7,7 @@
   <title>Dobble Reflex</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192.png" />
+  <script src="https://twemoji.maxcdn.com/v/latest/twemoji.min.js" crossorigin="anonymous"></script>
   <style>
     :root{
       --bg:#0f172a;--panel:#172033;--panel2:#1f2a44;--text:#f8fafc;--muted:#a7b0c2;
@@ -21,7 +22,7 @@
     label{font-size:13px;color:var(--muted);font-weight:700;display:block;margin:10px 0 6px}input,button,select{width:100%;border:1px solid var(--line);border-radius:16px;padding:14px 15px;font:inherit;color:var(--text);background:rgba(255,255,255,.08)}
     input{text-align:center;font-size:22px;font-weight:850;letter-spacing:.08em}input.name{font-size:18px;letter-spacing:0;text-align:left}button{font-weight:850;cursor:pointer;background:linear-gradient(135deg,#16a34a,#22c55e);border:0;color:#052e16;box-shadow:0 10px 28px rgba(34,197,94,.2)}button.secondary{background:rgba(255,255,255,.09);color:var(--text);box-shadow:none;border:1px solid var(--line)}button.danger{background:linear-gradient(135deg,#dc2626,#fb7185);color:#fff}button:disabled{opacity:.45;cursor:not-allowed}.small{font-size:13px;color:var(--muted)}
     .topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}.pill{padding:8px 12px;background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:999px;font-weight:800;color:var(--muted)}
-    .dobble{position:relative;margin:18px auto;width:min(88vw,430px);height:min(88vw,430px);border-radius:50%;background:#f8fafc;color:#111827;box-shadow:inset 0 0 0 8px rgba(15,23,42,.08),0 18px 44px rgba(0,0,0,.34);overflow:hidden;touch-action:manipulation}.dobble.disabled{filter:grayscale(.55);opacity:.75}.symbol{position:absolute;transform:translate(-50%,-50%);border:0;background:transparent;box-shadow:none;color:inherit;padding:0;width:auto;line-height:1;display:grid;place-items:center;text-shadow:0 2px 0 rgba(255,255,255,.45);transition:transform .12s ease,filter .12s ease}.symbol:active{transform:translate(-50%,-50%) scale(.9)}.symbol.bad{filter:drop-shadow(0 0 10px var(--red))}.symbol.good{filter:drop-shadow(0 0 10px var(--green))}
+    .dobble{position:relative;margin:18px auto;width:min(88vw,430px);height:min(88vw,430px);border-radius:50%;background:#f8fafc;color:#111827;box-shadow:inset 0 0 0 8px rgba(15,23,42,.08),0 18px 44px rgba(0,0,0,.34);overflow:hidden;touch-action:manipulation}.dobble.disabled{filter:grayscale(.55);opacity:.75}.symbol{position:absolute;transform:translate(-50%,-50%);border:0;background:transparent;box-shadow:none;color:inherit;padding:0;width:auto;line-height:1;display:grid;place-items:center;text-shadow:0 2px 0 rgba(255,255,255,.45);transition:transform .12s ease,filter .12s ease}.symbol img{width:1em;height:1em;display:block;pointer-events:none}.symbol:active{transform:translate(-50%,-50%) scale(.9)}.symbol.bad{filter:drop-shadow(0 0 10px var(--red))}.symbol.good{filter:drop-shadow(0 0 10px var(--green))}
     .centerMsg{position:fixed;inset:0;display:grid;place-items:center;background:rgba(2,6,23,.35);z-index:50;pointer-events:none}.centerMsg>div{background:rgba(15,23,42,.95);border:1px solid var(--line);padding:20px 28px;border-radius:24px;font-size:clamp(28px,8vw,54px);font-weight:950;text-align:center;box-shadow:var(--shadow)}
     .players{display:grid;gap:10px;margin-top:12px}.player{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.06)}.player b{font-size:18px}.actions{display:flex;gap:8px}.actions button{padding:9px 10px;border-radius:12px}.score{font-weight:950;color:var(--yellow)}.footer{position:fixed;left:0;right:0;bottom:0;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:rgba(15,23,42,.82);backdrop-filter:blur(10px);border-top:1px solid var(--line);z-index:20}.footer .inner{max-width:860px;margin:auto;display:flex;gap:10px;align-items:center;justify-content:space-between}.statusText{font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rank{font-size:22px;font-weight:950}.confetti{font-size:42px}.toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#111827;color:white;border:1px solid var(--line);border-radius:999px;padding:10px 16px;font-weight:850;z-index:100;box-shadow:var(--shadow);max-width:90vw;text-align:center}#keepAwakeVideo{position:fixed;left:-20px;top:-20px;width:1px;height:1px;opacity:0;pointer-events:none}
   </style>
@@ -211,77 +212,17 @@ async function generateNextRound(roundNumber){
   await update(roomRef,{...newPairs,status:'running',currentRound:{roundNumber,total,mainCardId,playerCards,locked,winner:null,startedAt:Date.now()}});
 }
 function handleHostWinner(room){
-  const r = room.currentRound;
-  if(!r || autoAdvancing) return;
-
-  // 1) Někdo klikl správně
-  if(r.winner){
-    const key = `${r.roundNumber}-${r.winner.playerId}-${r.winner.symbol}`;
-    if(processedWinnerKey === key) return;
-
-    processedWinnerKey = key;
-    autoAdvancing = true;
-
-    const pid = r.winner.playerId;
-    const p = room.players?.[pid];
-    const pc = r.playerCards?.[pid];
-
-    const ok =
-      p &&
-      pc !== undefined &&
-      commonSymbol(r.mainCardId, pc) === r.winner.symbol;
-
-    if(!ok){
-      update(roomRef,{
-        [`currentRound/locked/${pid}`]: true,
-        'currentRound/winner': null
-      }).then(()=>{
-        autoAdvancing = false;
-      });
-      return;
-    }
-
-    const score = (p.score || 0) + 1;
-
-    update(roomRef,{
-      status: 'roundResult',
-      [`players/${pid}/score`]: score,
-      'game/lastWinner': {
-        name: p.name,
-        playerId: pid,
-        roundNumber: r.roundNumber
-      }
-    });
-
-    setTimeout(()=>generateNextRound(r.roundNumber + 1),1000);
+  const r=room.currentRound; if(!r?.winner || autoAdvancing) return;
+  const key=`${r.roundNumber}-${r.winner.playerId}-${r.winner.symbol}`; if(processedWinnerKey===key) return; processedWinnerKey=key; autoAdvancing=true;
+  const pid=r.winner.playerId, p=room.players?.[pid];
+  const pc=r.playerCards?.[pid]; const ok=p && pc!==undefined && commonSymbol(r.mainCardId,pc)===r.winner.symbol;
+  if(!ok){
+    update(roomRef,{[`currentRound/locked/${pid}`]:true,'currentRound/winner':null}).then(()=>{autoAdvancing=false;});
     return;
   }
-
-  // 2) Nikdo neuhádl a všichni už jsou zamčení
-  if(room.status === 'running'){
-    const approvedIds = Object.entries(room.players || {})
-      .filter(([_, p]) => p.approved)
-      .map(([id]) => id);
-
-    const allLocked =
-      approvedIds.length > 0 &&
-      approvedIds.every(id => r.locked?.[id]);
-
-    if(allLocked){
-      autoAdvancing = true;
-
-      update(roomRef,{
-        status: 'roundResult',
-        'game/lastWinner': {
-          name: 'Nikdo',
-          playerId: '',
-          roundNumber: r.roundNumber
-        }
-      });
-
-      setTimeout(()=>generateNextRound(r.roundNumber + 1),1000);
-    }
-  }
+  const score=(p.score||0)+1;
+  update(roomRef,{status:'roundResult',[`players/${pid}/score`]:score,'game/lastWinner':{name:p.name,playerId:pid,roundNumber:r.roundNumber}});
+  setTimeout(()=>generateNextRound(r.roundNumber+1),1000);
 }
 
 function showGameHost(room){
@@ -299,9 +240,29 @@ function showGamePlayer(room,me){
   $('scorePanel').innerHTML=`<div class="rank">Body: ${me.score||0}</div><div class="small">${locked?'V tomto kole už nemůžeš klikat.':'Najdi společné emoji s hlavním telefonem.'}</div>`;
   showWinnerOverlay(room);
 }
+function getPositions(count){
+  const positions = [];
+
+  // první symbol přesně doprostřed
+  positions.push([50,50,64]);
+
+  // ostatní symboly rovnoměrně po kružnici
+  const radius = 36;
+  const outerCount = count - 1;
+
+  for(let i = 0; i < outerCount; i++){
+    const angle = -Math.PI / 2 + (i / outerCount) * 2 * Math.PI;
+    const x = 50 + radius * Math.cos(angle);
+    const y = 50 + radius * Math.sin(angle);
+    positions.push([x,y,48]);
+  }
+
+  return positions;
+}
+
 function renderCard(el, cardId, clickable, round){
   el.innerHTML=''; if(cardId===undefined||cardId===null) return;
-  const pos=[[50,18,54],[77,32,42],[78,65,58],[50,82,46],[22,65,52],[23,32,44],[50,50,64],[34,50,38]];
+  const pos=getPositions(CARDS[cardId].length);
   shuffle([...CARDS[cardId]]).forEach((sym,i)=>{
     const b=document.createElement('button'); b.className='symbol'; b.textContent=EMOJIS[sym];
     b.style.left=pos[i][0]+'%'; b.style.top=pos[i][1]+'%'; b.style.fontSize=pos[i][2]+'px';
@@ -309,6 +270,9 @@ function renderCard(el, cardId, clickable, round){
     if(clickable) b.onclick=()=>playerClick(sym, b, round);
     el.appendChild(b);
   });
+  if(window.twemoji){
+    twemoji.parse(el, {folder: 'svg', ext: '.svg'});
+  }
 }
 async function playerClick(symbol, btnEl, round){
   if(role!=='player' || !round || localLockedRound===round.roundNumber) return;
