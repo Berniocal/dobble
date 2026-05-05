@@ -3,7 +3,7 @@
 // 3) Zkopíruj sem konfiguraci webové aplikace z Firebase Console
 // 4) Tento soubor nahraj spolu s index.html, manifest.json a sw.js
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyD3_U6guVjZZQ9_Nt6mammPRFU1kDtjfBI",
   authDomain: "doub-93ec9.firebaseapp.com",
   databaseURL: "https://doub-93ec9-default-rtdb.europe-west1.firebasedatabase.app",
