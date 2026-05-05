@@ -211,17 +211,77 @@ async function generateNextRound(roundNumber){
   await update(roomRef,{...newPairs,status:'running',currentRound:{roundNumber,total,mainCardId,playerCards,locked,winner:null,startedAt:Date.now()}});
 }
 function handleHostWinner(room){
-  const r=room.currentRound; if(!r?.winner || autoAdvancing) return;
-  const key=`${r.roundNumber}-${r.winner.playerId}-${r.winner.symbol}`; if(processedWinnerKey===key) return; processedWinnerKey=key; autoAdvancing=true;
-  const pid=r.winner.playerId, p=room.players?.[pid];
-  const pc=r.playerCards?.[pid]; const ok=p && pc!==undefined && commonSymbol(r.mainCardId,pc)===r.winner.symbol;
-  if(!ok){
-    update(roomRef,{[`currentRound/locked/${pid}`]:true,'currentRound/winner':null}).then(()=>{autoAdvancing=false;});
+  const r = room.currentRound;
+  if(!r || autoAdvancing) return;
+
+  // 1) Někdo klikl správně
+  if(r.winner){
+    const key = `${r.roundNumber}-${r.winner.playerId}-${r.winner.symbol}`;
+    if(processedWinnerKey === key) return;
+
+    processedWinnerKey = key;
+    autoAdvancing = true;
+
+    const pid = r.winner.playerId;
+    const p = room.players?.[pid];
+    const pc = r.playerCards?.[pid];
+
+    const ok =
+      p &&
+      pc !== undefined &&
+      commonSymbol(r.mainCardId, pc) === r.winner.symbol;
+
+    if(!ok){
+      update(roomRef,{
+        [`currentRound/locked/${pid}`]: true,
+        'currentRound/winner': null
+      }).then(()=>{
+        autoAdvancing = false;
+      });
+      return;
+    }
+
+    const score = (p.score || 0) + 1;
+
+    update(roomRef,{
+      status: 'roundResult',
+      [`players/${pid}/score`]: score,
+      'game/lastWinner': {
+        name: p.name,
+        playerId: pid,
+        roundNumber: r.roundNumber
+      }
+    });
+
+    setTimeout(()=>generateNextRound(r.roundNumber + 1),1000);
     return;
   }
-  const score=(p.score||0)+1;
-  update(roomRef,{status:'roundResult',[`players/${pid}/score`]:score,'game/lastWinner':{name:p.name,playerId:pid,roundNumber:r.roundNumber}});
-  setTimeout(()=>generateNextRound(r.roundNumber+1),1000);
+
+  // 2) Nikdo neuhádl a všichni už jsou zamčení
+  if(room.status === 'running'){
+    const approvedIds = Object.entries(room.players || {})
+      .filter(([_, p]) => p.approved)
+      .map(([id]) => id);
+
+    const allLocked =
+      approvedIds.length > 0 &&
+      approvedIds.every(id => r.locked?.[id]);
+
+    if(allLocked){
+      autoAdvancing = true;
+
+      update(roomRef,{
+        status: 'roundResult',
+        'game/lastWinner': {
+          name: 'Nikdo',
+          playerId: '',
+          roundNumber: r.roundNumber
+        }
+      });
+
+      setTimeout(()=>generateNextRound(r.roundNumber + 1),1000);
+    }
+  }
 }
 
 function showGameHost(room){
