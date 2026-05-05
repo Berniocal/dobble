@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dobble-reflex-v3';
+const CACHE_NAME = 'dobble-reflex-v4';
 const ASSETS = [
   './',
   './index.html',
