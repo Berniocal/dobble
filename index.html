@@ -31,7 +31,6 @@
   <h1>Dobble Reflex</h1>
   <p class="sub">Jeden hlavní telefon uprostřed. Ostatní hráči hledají společné emoji.</p>
 
-
   <section id="modeScreen" class="card">
     <h2>Vyber režim hry</h2>
     <p class="small">Online režim používá hlavní telefon a Firebase. Offline výzva běží jen na jednom telefonu podle stejného 7místného seedu.</p>
@@ -50,6 +49,7 @@
       <button id="enterBtn">Vstoupit do místnosti</button>
       <button id="randomRoomBtn" class="secondary">Náhodné číslo</button>
     </div>
+    <button id="onlineBackBtn" class="secondary" style="margin-top:10px">Zpět</button>
     <p class="small">Když místnost ještě neexistuje, tento telefon se stane hlavním. Další telefony budou hráči a musí je schválit hlavní.</p>
   </section>
 
@@ -65,7 +65,7 @@
     </div>
     <button id="offlineBackBtn" class="secondary" style="margin-top:10px">Zpět</button>
     <p class="small">Když kamarád zadá stejný seed a stejný počet kol, dostane stejnou hru. Vyhrává víc bodů, při rovnosti kratší čas.</p>
-  
+  </section>
 
   <section id="hostLobby" class="card hidden">
     <div class="topbar"><span class="pill">Hlavní telefon</span><span class="pill">Místnost <b id="hostRoomCode"></b></span></div>
@@ -88,7 +88,6 @@
     <div id="playerCard" class="dobble hidden"></div>
     <div id="scorePanel" class="card"></div>
   </section>
-
 
   <section id="offlineGameScreen" class="hidden">
     <div class="topbar">
@@ -114,7 +113,6 @@
 <div id="centerMsg" class="centerMsg hidden"><div id="centerMsgText"></div></div>
 <div id="toast" class="toast hidden"></div>
 <video id="keepAwakeVideo" muted loop playsinline></video>
-
 <div class="footer"><div class="inner"><span class="statusText" id="statusText">Nepřipojeno</span><button id="wakeBtn" class="secondary" style="width:auto;padding:9px 12px">🔆 obrazovka</button></div></div>
 
 <script type="module">
@@ -158,6 +156,7 @@ function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.rando
 function sample(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
 
 $('onlineModeBtn').onclick=()=>{ hide('modeScreen'); show('joinScreen'); status('Online režim.'); };
+$('onlineBackBtn').onclick=()=>{ hide('joinScreen'); show('modeScreen'); status('Nepřipojeno'); };
 $('offlineModeBtn').onclick=()=>{ hide('modeScreen'); show('offlineSetup'); status('Offline výzva.'); };
 $('offlineBackBtn').onclick=()=>{ hide('offlineSetup'); show('modeScreen'); status('Nepřipojeno'); };
 $('offlineRandomSeedBtn').onclick=()=>{ $('offlineSeedInput').value=String(Math.floor(1000000+Math.random()*9000000)); };
