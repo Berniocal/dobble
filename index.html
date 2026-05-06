@@ -19,9 +19,9 @@
     .app{max-width:860px;margin:0 auto}.card{background:color-mix(in srgb,var(--panel) 92%,transparent);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:18px;backdrop-filter:blur(12px)}
     h1{font-size:clamp(32px,8vw,58px);line-height:1;margin:8px 0 6px;text-align:center}.sub{text-align:center;color:var(--muted);margin:0 0 18px}.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1}.hidden{display:none!important}
     label{font-size:13px;color:var(--muted);font-weight:700;display:block;margin:10px 0 6px}input,button,select{width:100%;border:1px solid var(--line);border-radius:16px;padding:14px 15px;font:inherit;color:var(--text);background:rgba(255,255,255,.08)}
-    input{text-align:center;font-size:22px;font-weight:850;letter-spacing:.08em}input.name{font-size:18px;letter-spacing:0;text-align:left}button{font-weight:850;cursor:pointer;background:linear-gradient(135deg,#16a34a,#22c55e);border:0;color:#052e16;box-shadow:0 10px 28px rgba(34,197,94,.2)}button.secondary{background:rgba(255,255,255,.09);color:var(--text);box-shadow:none;border:1px solid var(--line)}button.danger{background:linear-gradient(135deg,#dc2626,#fb7185);color:#fff}button:disabled{opacity:.45;cursor:not-allowed}.small{font-size:13px;color:var(--muted)}
+    input{text-align:center;font-size:22px;font-weight:850;letter-spacing:.08em}input.name{font-size:18px;letter-spacing:0;text-align:left}button{font-weight:850;cursor:pointer;background:linear-gradient(135deg,#16a34a,#22c55e);border:0;color:#052e16;box-shadow:0 10px 28px rgba(34,197,94,.2)}button.secondary{background:rgba(255,255,255,.09);color:var(--text);box-shadow:none;border:1px solid var(--line)}button.danger{background:linear-gradient(135deg,#dc2626,#fb7185);color:#fff}button:disabled{cursor:not-allowed}.small{font-size:13px;color:var(--muted)}
     .topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}.pill{padding:8px 12px;background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:999px;font-weight:800;color:var(--muted)}
-    .dobble{position:relative;margin:18px auto;width:min(88vw,430px);height:min(88vw,430px);border-radius:50%;background:#f8fafc;color:#111827;box-shadow:inset 0 0 0 8px rgba(15,23,42,.08),0 18px 44px rgba(0,0,0,.34);overflow:hidden;touch-action:manipulation}.dobble.disabled{filter:grayscale(.55);opacity:.75}.symbol{position:absolute;transform:translate(-50%,-50%);border:0;background:transparent;box-shadow:none;color:inherit;padding:0;width:auto;line-height:1;display:grid;place-items:center;transition:transform .12s ease,filter .12s ease}.symbol img{width:1em;height:1em;display:block;pointer-events:none;user-select:none}.symbol:active{transform:translate(-50%,-50%) scale(.9)}.symbol.bad{filter:drop-shadow(0 0 10px var(--red))}.symbol.good{filter:drop-shadow(0 0 10px var(--green))}
+    .dobble{position:relative;margin:18px auto;width:min(88vw,430px);height:min(88vw,430px);border-radius:50%;background:#f8fafc;color:#111827;box-shadow:inset 0 0 0 8px rgba(15,23,42,.08),0 18px 44px rgba(0,0,0,.34);overflow:hidden;touch-action:manipulation}.dobble.disabled{filter:none;opacity:1}.symbol{position:absolute;transform:translate(-50%,-50%);border:0;background:transparent;box-shadow:none;color:inherit;padding:0;width:auto;line-height:1;display:grid;place-items:center;transition:transform .12s ease,filter .12s ease}.symbol img{width:1em;height:1em;display:block;pointer-events:none;user-select:none}.symbol:active{transform:translate(-50%,-50%) scale(.9)}.symbol.bad{filter:drop-shadow(0 0 10px var(--red))}.symbol.good{filter:drop-shadow(0 0 10px var(--green))}
     .centerMsg{position:fixed;inset:0;display:grid;place-items:center;background:rgba(2,6,23,.35);z-index:50;pointer-events:none}.centerMsg>div{background:rgba(15,23,42,.95);border:1px solid var(--line);padding:20px 28px;border-radius:24px;font-size:clamp(28px,8vw,54px);font-weight:950;text-align:center;box-shadow:var(--shadow)}
     .players{display:grid;gap:10px;margin-top:12px}.player{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.06)}.player b{font-size:18px}.actions{display:flex;gap:8px}.actions button{padding:9px 10px;border-radius:12px}.score{font-weight:950;color:var(--yellow)}.footer{position:fixed;left:0;right:0;bottom:0;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:rgba(15,23,42,.82);backdrop-filter:blur(10px);border-top:1px solid var(--line);z-index:20}.footer .inner{max-width:860px;margin:auto;display:flex;gap:10px;align-items:center;justify-content:space-between}.statusText{font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rank{font-size:22px;font-weight:950}.confetti{font-size:42px}.toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#111827;color:white;border:1px solid var(--line);border-radius:999px;padding:10px 16px;font-weight:850;z-index:100;box-shadow:var(--shadow);max-width:90vw;text-align:center}#keepAwakeVideo{position:fixed;left:-20px;top:-20px;width:1px;height:1px;opacity:0;pointer-events:none}.offlineSplit{display:grid;grid-template-rows:1fr 1fr;gap:10px;height:calc(100vh - 150px);min-height:560px}.offlineCard{width:min(78vw,360px);height:min(78vw,360px);margin:8px auto 4px}.offlineLabel{text-align:center;font-weight:850}@media (max-height:760px){.offlineSplit{height:auto;min-height:0}.offlineCard{width:min(68vw,300px);height:min(68vw,300px)}}
   </style>
@@ -113,8 +113,6 @@
 <div id="centerMsg" class="centerMsg hidden"><div id="centerMsgText"></div></div>
 <div id="toast" class="toast hidden"></div>
 <video id="keepAwakeVideo" muted loop playsinline></video>
-<div class="footer"><div class="inner"><span class="statusText" id="statusText">Nepřipojeno</span><button id="wakeBtn" class="secondary" style="width:auto;padding:9px 12px">🔆 obrazovka</button></div></div>
-
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js';
 import { getDatabase, ref, get, set, update, remove, onValue, off, onDisconnect, runTransaction } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js';
@@ -149,7 +147,7 @@ function makeDobbleCards(n){
 function commonSymbol(a,b){ return CARDS[a].find(x=>CARDS[b].includes(x)); }
 function show(id){ $(id).classList.remove('hidden'); } function hide(id){ $(id).classList.add('hidden'); }
 function toast(t){ $('toast').textContent=t; show('toast'); setTimeout(()=>hide('toast'),1800); }
-function status(t){ $('statusText').textContent=t; }
+function status(t){ const el=$('statusText'); if(el) el.textContent=t; }
 function cleanRoom(v){ return (v||'').replace(/\D/g,'').slice(0,5); }
 function cleanName(v){ return (v||'').trim().slice(0,18) || 'Hráč'; }
 function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
@@ -169,7 +167,7 @@ $('roundsInput').oninput=()=> $('roundsValue').textContent=$('roundsInput').valu
 $('enterBtn').onclick=enterRoom;
 $('startBtn').onclick=startGame;
 $('closeRoomBtn').onclick=()=> roomRef && remove(roomRef);
-$('wakeBtn').onclick=enableWake;
+if($('wakeBtn')) $('wakeBtn').onclick=enableWake;
 $('roomInput').addEventListener('input',e=>e.target.value=cleanRoom(e.target.value));
 
 
@@ -244,7 +242,8 @@ function renderOfflineMainCard(el, cardId){
     b.style.left=pos[i][0]+'%';
     b.style.top=pos[i][1]+'%';
     b.style.fontSize=pos[i][2]+'px';
-    b.disabled=true;
+    b.disabled=false;
+    b.style.pointerEvents='none';
     b.setAttribute('aria-label', EMOJIS[sym]);
     const img=document.createElement('img');
     img.src=SYMBOL_FILES[sym];
