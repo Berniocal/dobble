@@ -23,7 +23,7 @@
     .topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}.pill{padding:8px 12px;background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:999px;font-weight:800;color:var(--muted)}
     .dobble{position:relative;margin:18px auto;width:min(88vw,430px);height:min(88vw,430px);border-radius:50%;background:#f8fafc;color:#111827;box-shadow:inset 0 0 0 8px rgba(15,23,42,.08),0 18px 44px rgba(0,0,0,.34);overflow:hidden;touch-action:manipulation}.dobble.disabled{filter:none;opacity:1}.symbol{position:absolute;transform:translate(-50%,-50%);border:0;background:transparent;box-shadow:none;color:inherit;padding:0;width:auto;line-height:1;display:grid;place-items:center;transition:transform .12s ease,filter .12s ease}.symbol img{width:1em;height:1em;display:block;pointer-events:none;user-select:none}.symbol:active{transform:translate(-50%,-50%) scale(.9)}.symbol.bad{filter:drop-shadow(0 0 10px var(--red))}.symbol.good{filter:drop-shadow(0 0 10px var(--green))}
     .centerMsg{position:fixed;inset:0;display:grid;place-items:center;background:rgba(2,6,23,.35);z-index:50;pointer-events:none}.centerMsg>div{background:rgba(15,23,42,.95);border:1px solid var(--line);padding:20px 28px;border-radius:24px;font-size:clamp(28px,8vw,54px);font-weight:950;text-align:center;box-shadow:var(--shadow)}
-    .players{display:grid;gap:10px;margin-top:12px}.player{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.06)}.player b{font-size:18px}.actions{display:flex;gap:8px}.actions button{padding:9px 10px;border-radius:12px}.score{font-weight:950;color:var(--yellow)}.footer{position:fixed;left:0;right:0;bottom:0;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:rgba(15,23,42,.82);backdrop-filter:blur(10px);border-top:1px solid var(--line);z-index:20}.footer .inner{max-width:860px;margin:auto;display:flex;gap:10px;align-items:center;justify-content:space-between}.statusText{font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rank{font-size:22px;font-weight:950}.confetti{font-size:42px}.toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#111827;color:white;border:1px solid var(--line);border-radius:999px;padding:10px 16px;font-weight:850;z-index:100;box-shadow:var(--shadow);max-width:90vw;text-align:center}#keepAwakeVideo{position:fixed;left:-20px;top:-20px;width:1px;height:1px;opacity:0;pointer-events:none}.offlineSplit{display:grid;grid-template-rows:1fr 1fr;gap:10px;height:calc(100vh - 150px);min-height:560px}.offlineCard{width:min(78vw,360px);height:min(78vw,360px);margin:8px auto 4px}.offlineLabel{text-align:center;font-weight:850}@media (max-height:760px){.offlineSplit{height:auto;min-height:0}.offlineCard{width:min(68vw,300px);height:min(68vw,300px)}}
+    .players{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:12px}.player{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.06)}.player b{font-size:18px}.actions{display:flex;gap:8px}.actions button{padding:9px 10px;border-radius:12px}.score{font-weight:950;color:var(--yellow)}.footer{position:fixed;left:0;right:0;bottom:0;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:rgba(15,23,42,.82);backdrop-filter:blur(10px);border-top:1px solid var(--line);z-index:20}.footer .inner{max-width:860px;margin:auto;display:flex;gap:10px;align-items:center;justify-content:space-between}.statusText{font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rank{font-size:22px;font-weight:950}.confetti{font-size:42px}.toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#111827;color:white;border:1px solid var(--line);border-radius:999px;padding:10px 16px;font-weight:850;z-index:100;box-shadow:var(--shadow);max-width:90vw;text-align:center}#keepAwakeVideo{position:fixed;left:-20px;top:-20px;width:1px;height:1px;opacity:0;pointer-events:none}.offlineSplit{display:grid;grid-template-rows:1fr 1fr;gap:10px;height:calc(100vh - 150px);min-height:560px}.offlineCard{width:min(78vw,360px);height:min(78vw,360px);margin:8px auto 4px}.offlineLabel{text-align:center;font-weight:850}@media (max-height:760px){.offlineSplit{height:auto;min-height:0}.offlineCard{width:min(68vw,300px);height:min(68vw,300px)}}
   </style>
 </head>
 <body>
@@ -369,7 +369,8 @@ function renderHost(room){
   if(room.status==='lobby'){
     hide('gameScreen'); hide('finishScreen'); show('hostLobby');
     const box=$('hostPlayers'); box.innerHTML='';
-    const players=room.players||{}; const ids=Object.keys(players);
+    const players=room.players||{};
+    const ids=Object.keys(players).sort((a,b)=>(players[b]?.joinedAt||0)-(players[a]?.joinedAt||0));
     if(!ids.length) box.innerHTML='<p class="small">Zatím tu nejsou žádní hráči.</p>';
     ids.forEach(id=>{
       const p=players[id]; const div=document.createElement('div'); div.className='player';
@@ -410,7 +411,9 @@ async function generateNextRound(roundNumber){
   const total=room.settings?.rounds||20;
   if(roundNumber>total){ await update(roomRef,{status:'finished',currentRound:null}); return; }
   const players=Object.fromEntries(Object.entries(room.players||{}).filter(([_,p])=>p.approved));
-  const mainCardId=Math.floor(Math.random()*CARDS.length);
+  const lastWinnerId = room.game?.lastWinner?.playerId;
+  const lastWinnerCard = lastWinnerId ? room.currentRound?.playerCards?.[lastWinnerId] : undefined;
+  const mainCardId = lastWinnerCard !== undefined ? lastWinnerCard : Math.floor(Math.random()*CARDS.length);
   const playerCards={}, locked={}, newPairs={};
   for(const id of Object.keys(players)){
     const used=room.game?.usedPairs?.[id]||{};
@@ -469,40 +472,19 @@ function handleHostWinner(room){
     return;
   }
 
-  // 2) Všichni schválení hráči klikli špatně, takže už nikdo nemůže hrát
-  if(room.status === 'running'){
-    const approvedIds = Object.entries(room.players || {})
-      .filter(([_, p]) => p.approved)
-      .map(([id]) => id);
-
-    const allLocked =
-      approvedIds.length > 0 &&
-      approvedIds.every(id => r.locked?.[id]);
-
-    if(allLocked){
-      autoAdvancing = true;
-
-      update(roomRef,{
-        status: 'roundResult',
-        'game/lastWinner': {
-          name: 'Nikdo',
-          playerId: '',
-          roundNumber: r.roundNumber
-        }
-      });
-
-      setTimeout(()=>generateNextRound(r.roundNumber + 1),1000);
-    }
-  }
+  // 2) Špatné kliknutí kartu na hlavním telefonu nikdy neposouvá.
+  // Kolo zůstává stejné, dokud někdo netrefí správný symbol.
 }
 function showGameHost(room){
   hide('hostLobby'); hide('playerLobby'); hide('finishScreen'); show('gameScreen'); show('hostCard'); hide('playerCard');
   $('rolePill').textContent='Hlavní karta'; $('roundPill').textContent=`Kolo ${room.currentRound?.roundNumber||'?'} / ${room.currentRound?.total||'?'}`;
   renderCard($('hostCard'), room.currentRound?.mainCardId, false, room.currentRound);
-  renderScores(room); showWinnerOverlay(room);
+  $('scorePanel').innerHTML='';
+  hide('scorePanel');
+  showWinnerOverlay(room);
 }
 function showGamePlayer(room,me){
-  hide('hostLobby'); hide('playerLobby'); hide('finishScreen'); show('gameScreen'); hide('hostCard'); show('playerCard');
+  hide('hostLobby'); hide('playerLobby'); hide('finishScreen'); show('gameScreen'); hide('hostCard'); show('playerCard'); show('scorePanel');
   const r=room.currentRound; $('rolePill').textContent=me.name; $('roundPill').textContent=`Kolo ${r?.roundNumber||'?'} / ${r?.total||'?'}`;
   const myCard=r?.playerCards?.[playerId]; const locked=!!r?.locked?.[playerId] || room.status==='roundResult';
   renderCard($('playerCard'), myCard, !locked, r);
