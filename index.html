@@ -45,6 +45,7 @@
     <div class="row" style="margin-top:8px">
       <button id="onlineClassicBtn">Klasická online</button>
       <button id="onlineHostPlaysBtn" class="secondary">Online hraje i hlavní</button>
+      <button id="onlineSoloChallengeBtn" class="secondary">Online výzva každý sám</button>
     </div>
     <p class="small" id="onlineVariantInfo">Hlavní telefon je jen centrální karta. Hráči mají svou kartu na svém telefonu.</p>
     <label>Číslo místnosti</label>
@@ -158,6 +159,7 @@ sessionStorage.setItem('dobble_uid', uid);
 
 let role = null, roomCode = null, playerId = uid, unsubRoom = null, processedWinnerKey = '', localLockedRound = -1;
 let onlineVariant = 'classic';
+let onlineSoloGame = null;
 let roomRef = null, playerRef = null, wakeLock = null, autoAdvancing = false;
 let offlineGame = null, offlineTimer = null;
 
@@ -204,13 +206,17 @@ function stableShuffle(a, seedText){
 $('onlineModeBtn').onclick=()=>{ hide('modeScreen'); show('joinScreen'); status('Online režim.'); };
 $('onlineClassicBtn').onclick=()=>setOnlineVariant('classic');
 $('onlineHostPlaysBtn').onclick=()=>setOnlineVariant('hostPlays');
+$('onlineSoloChallengeBtn').onclick=()=>setOnlineVariant('soloChallenge');
 function setOnlineVariant(v){
   onlineVariant = v;
   $('onlineClassicBtn').className = v === 'classic' ? '' : 'secondary';
   $('onlineHostPlaysBtn').className = v === 'hostPlays' ? '' : 'secondary';
-  $('onlineVariantInfo').textContent = v === 'hostPlays'
-    ? 'Hraje i hlavní telefon. Na každém telefonu bude nahoře společná karta a dole vlastní karta hráče.'
-    : 'Hlavní telefon je jen centrální karta. Hráči mají svou kartu na svém telefonu.';
+  $('onlineSoloChallengeBtn').className = v === 'soloChallenge' ? '' : 'secondary';
+  $('onlineVariantInfo').textContent = v === 'soloChallenge'
+    ? 'Online výzva: hraje každý samostatně na svém telefonu, nahoře společná karta, dole vlastní karta, pořadí se počítá podle bodů a času.'
+    : (v === 'hostPlays'
+      ? 'Hraje i hlavní telefon. Na každém telefonu bude nahoře společná karta a dole vlastní karta hráče.'
+      : 'Hlavní telefon je jen centrální karta. Hráči mají svou kartu na svém telefonu.');
 }
 $('onlineBackBtn').onclick=()=>{ hide('joinScreen'); show('modeScreen'); status('Nepřipojeno'); };
 $('offlineModeBtn').onclick=()=>{ hide('modeScreen'); show('offlineSetup'); status('Offline výzva.'); };
@@ -375,10 +381,11 @@ async function enterRoom(){
   const snap=await get(roomRef);
   if(!snap.exists()){
     role='host';
-    const hostPlays = onlineVariant === 'hostPlays';
+    const hostPlays = onlineVariant === 'hostPlays' || onlineVariant === 'soloChallenge';
+    const soloChallenge = onlineVariant === 'soloChallenge';
     const hostName = cleanName($('nameInput').value || 'Hlavní');
     const initialPlayers = hostPlays ? {[playerId]:{name:hostName,approved:true,score:0,joinedAt:Date.now(),hostPlayer:true}} : {};
-    await set(roomRef,{hostId:uid,status:'lobby',createdAt:Date.now(),settings:{rounds:Number($('roundsInput').value)||20,hostPlays},players:initialPlayers});
+    await set(roomRef,{hostId:uid,status:'lobby',createdAt:Date.now(),settings:{rounds:Number($('roundsInput').value)||20,hostPlays,soloChallenge,onlineVariant},players:initialPlayers});
     onDisconnect(roomRef).remove();
     setupHost();
   }else{
@@ -422,6 +429,9 @@ function renderHost(room){
   }else if(room.status==='running' || room.status==='roundResult'){
     showGameHost(room);
     handleHostWinner(room);
+  }else if(room.status==='soloRunning' || room.status==='soloFinished'){
+    showSoloChallenge(room, room.players?.[playerId] || {});
+    checkSoloFinished(room);
   }else if(room.status==='finished') renderFinish(room);
 }
 function renderPlayer(room){
@@ -432,6 +442,7 @@ function renderPlayer(room){
     $('waitingTitle').textContent=me.approved?'Jsi schválen. Čekej na start hry.':'Čekáš na schválení…';
     status(me.approved?'Schváleno, čekáš na start.':'Čekáš na schválení.');
   }else if(room.status==='running' || room.status==='roundResult') showGamePlayer(room,me);
+  else if(room.status==='soloRunning' || room.status==='soloFinished') showSoloChallenge(room,me);
   else if(room.status==='finished') renderFinish(room,me);
 }
 
@@ -440,8 +451,25 @@ async function startGame(){
   const approved=Object.fromEntries(Object.entries(players).filter(([_,p])=>p.approved));
   if(!Object.keys(approved).length) return toast('Nejdřív schval aspoň jednoho hráče.');
   const rounds=Math.max(1,Math.min(100,Number($('roundsInput').value)||20));
-  const resets={}; Object.keys(approved).forEach(id=>resets[`players/${id}/score`]=0);
-  await update(roomRef,{status:'running',settings:{rounds,hostPlays:!!room.settings?.hostPlays},game:{usedPairs:{},lastWinner:null},...resets});
+  const resets={};
+  Object.keys(approved).forEach(id=>{
+    resets[`players/${id}/score`]=0;
+    resets[`players/${id}/soloScore`]=0;
+    resets[`players/${id}/soloTimeMs`]=null;
+    resets[`players/${id}/soloFinished`]=false;
+    resets[`players/${id}/soloPlace`]=null;
+  });
+  if(room.settings?.soloChallenge){
+    onlineSoloGame = null;
+    await update(roomRef,{
+      status:'soloRunning',
+      settings:{rounds,hostPlays:true,soloChallenge:true,onlineVariant:'soloChallenge'},
+      game:{challengeSeed:String(Math.floor(1000000+Math.random()*9000000)),startedAt:Date.now(),lastWinner:null},
+      ...resets
+    });
+    return;
+  }
+  await update(roomRef,{status:'running',settings:{rounds,hostPlays:!!room.settings?.hostPlays,soloChallenge:false,onlineVariant:room.settings?.hostPlays?'hostPlays':'classic'},game:{usedPairs:{},lastWinner:null},...resets});
   await generateNextRound(1);
 }
 async function generateNextRound(roundNumber){
@@ -587,6 +615,149 @@ function showGamePlayer(room,me){
   $('scorePanel').innerHTML=`<div class="rank">Body: ${me.score||0}</div><div class="small">${locked?'V tomto kole už nemůžeš klikat.':'Najdi společné emoji se společnou kartou.'}</div>`;
   showWinnerOverlay(room);
 }
+
+function ensureOnlineSoloGame(room){
+  const rounds = room.settings?.rounds || 20;
+  const seed = room.game?.challengeSeed || '1234567';
+  if(onlineSoloGame && onlineSoloGame.seed === seed && onlineSoloGame.rounds === rounds) return;
+  onlineSoloGame = {
+    seed,
+    rounds,
+    current: 0,
+    score: 0,
+    startTime: performance.now(),
+    endTime: null,
+    data: makeOfflineRounds(seed, rounds),
+    finishedSent: false
+  };
+  localLockedRound = -1;
+}
+function showSoloChallenge(room, me){
+  hide('hostLobby'); hide('playerLobby'); hide('finishScreen'); hide('centerMsg'); show('gameScreen'); show('scorePanel');
+  $('gameScreen').classList.add('onlineSplit');
+  show('onlineMainLabel'); show('onlinePlayerLabel'); show('hostCard'); show('playerCard');
+  $('hostCard').classList.add('onlineCard'); $('playerCard').classList.add('onlineCard');
+  $('rolePill').textContent = me?.name || (role === 'host' ? 'Hlavní' : 'Hráč');
+  ensureOnlineSoloGame(room);
+  const game = onlineSoloGame;
+  const r = game.data[game.current];
+  if(r && !game.endTime){
+    $('roundPill').textContent = `Kolo ${r.roundNumber} / ${r.total}`;
+    renderCard($('hostCard'), r.mainCardId, false, r);
+    renderOnlineSoloPlayerCard($('playerCard'), r);
+    $('playerCard').classList.remove('disabled');
+  }else{
+    $('roundPill').textContent = `Hotovo ${game.rounds} / ${game.rounds}`;
+    $('playerCard').classList.add('disabled');
+  }
+  renderSoloScorePanel(room, me);
+}
+function renderOnlineSoloPlayerCard(el, round){
+  el.innerHTML='';
+  if(!round) return;
+  const cardId = round.playerCardId;
+  const pos=getPositions(CARDS[cardId].length);
+  stableShuffle([...CARDS[cardId]], `solo-${onlineSoloGame.seed}-${round.roundNumber}-${cardId}`).forEach((sym,i)=>{
+    const b=document.createElement('button');
+    b.className='symbol';
+    b.style.left=pos[i][0]+'%';
+    b.style.top=pos[i][1]+'%';
+    b.style.fontSize=pos[i][2]+'px';
+    b.disabled=false;
+    b.setAttribute('aria-label', EMOJIS[sym]);
+    const img=document.createElement('img');
+    img.src=SYMBOL_FILES[sym];
+    img.alt=EMOJIS[sym];
+    img.draggable=false;
+    b.appendChild(img);
+    b.onclick=()=>onlineSoloClick(sym, b);
+    el.appendChild(b);
+  });
+}
+async function onlineSoloClick(symbol, btnEl){
+  if(!onlineSoloGame || onlineSoloGame.endTime) return;
+  const game = onlineSoloGame;
+  const r = game.data[game.current];
+  if(!r || localLockedRound === r.roundNumber) return;
+  localLockedRound = r.roundNumber;
+  const correct = commonSymbol(r.mainCardId, r.playerCardId);
+  if(symbol === correct){
+    game.score++;
+    btnEl.classList.add('good');
+  }else{
+    btnEl.classList.add('bad');
+  }
+  game.current++;
+  await update(ref(db,`rooms/${roomCode}/players/${playerId}`),{soloScore:game.score,score:game.score});
+  setTimeout(()=>advanceOnlineSoloRound(),180);
+}
+async function advanceOnlineSoloRound(){
+  if(!onlineSoloGame) return;
+  localLockedRound = -1;
+  if(onlineSoloGame.current >= onlineSoloGame.rounds){
+    await finishOnlineSoloGame();
+    return;
+  }
+  const snap=await get(roomRef); const room=snap.val();
+  if(room) showSoloChallenge(room, room.players?.[playerId] || {});
+}
+async function finishOnlineSoloGame(){
+  if(!onlineSoloGame || onlineSoloGame.finishedSent) return;
+  onlineSoloGame.endTime = performance.now();
+  onlineSoloGame.finishedSent = true;
+  const timeMs = Math.round(onlineSoloGame.endTime - onlineSoloGame.startTime);
+  await update(ref(db,`rooms/${roomCode}/players/${playerId}`),{
+    soloScore: onlineSoloGame.score,
+    score: onlineSoloGame.score,
+    soloTimeMs: timeMs,
+    soloFinished: true,
+    soloFinishedAt: Date.now()
+  });
+  const snap=await get(roomRef); const room=snap.val();
+  if(room) showSoloChallenge(room, room.players?.[playerId] || {});
+}
+function getSoloRanking(room){
+  return Object.entries(room.players||{})
+    .filter(([_,p])=>p.approved)
+    .sort((a,b)=>{
+      const sa = a[1].soloScore ?? a[1].score ?? 0;
+      const sb = b[1].soloScore ?? b[1].score ?? 0;
+      if(sb !== sa) return sb - sa;
+      const ta = a[1].soloTimeMs;
+      const tb = b[1].soloTimeMs;
+      if(ta == null && tb == null) return (a[1].joinedAt||0)-(b[1].joinedAt||0);
+      if(ta == null) return 1;
+      if(tb == null) return -1;
+      return ta - tb;
+    });
+}
+function renderSoloScorePanel(room, me){
+  const game = onlineSoloGame;
+  const ranking = getSoloRanking(room);
+  const place = ranking.findIndex(([id])=>id===playerId)+1;
+  const myScore = game?.score ?? me?.soloScore ?? me?.score ?? 0;
+  const myTimeMs = game?.endTime ? Math.round(game.endTime - game.startTime) : (me?.soloTimeMs ?? null);
+  const timeText = myTimeMs == null ? 'hra běží' : `${(myTimeMs/1000).toFixed(2)} s`;
+  const rows = ranking.map(([id,p],i)=>{
+    const score = p.soloScore ?? p.score ?? 0;
+    const time = p.soloTimeMs == null ? (p.soloFinished ? '' : 'hraje') : `${(p.soloTimeMs/1000).toFixed(2)} s`;
+    return `<div class="player"><div><b>${i+1}. ${esc(p.name)}</b><div class="small">${time}</div></div><div class="score">${score}</div></div>`;
+  }).join('');
+  $('scorePanel').innerHTML = `
+    <div class="rank">${game?.endTime ? 'Hotovo' : 'Body'}: ${myScore}</div>
+    <div class="small">Čas: <b>${timeText}</b>${place>0 ? ` · aktuálně ${place}. místo` : ''}</div>
+    <div style="height:10px"></div>
+    ${rows || '<p class="small">Žádní hráči.</p>'}
+  `;
+}
+async function checkSoloFinished(room){
+  if(room.status !== 'soloRunning') return;
+  const approved = Object.entries(room.players||{}).filter(([_,p])=>p.approved);
+  if(approved.length && approved.every(([_,p])=>p.soloFinished)){
+    await update(roomRef,{status:'soloFinished'});
+  }
+}
+
 function getPositions(count){
   const positions = [];
 
