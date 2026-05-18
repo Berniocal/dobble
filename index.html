@@ -110,7 +110,7 @@
       <label>Počet kol / karet: <span id="roundsValue">20</span></label>
       <input id="roundsInput" type="range" min="1" max="100" value="20" />
       <label>Časový limit: <span id="timeLimitValue">10</span> s</label>
-      <input id="timeLimitInput" type="range" min="5" max="60" value="10" />
+      <input id="timeLimitInput" type="range" min="5" max="180" value="10" />
     </div>
     <h2>Hráči</h2>
     <div id="hostPlayers" class="players"></div>
@@ -154,6 +154,7 @@
 </div>
 
 <div id="centerMsg" class="centerMsg hidden"><div id="centerMsgText"></div></div>
+<div id="freezeOverlay" class="freezeOverlay hidden"><div class="freezeNumber" id="freezeNumber">5</div></div>
 <div id="toast" class="toast hidden"></div>
 <video id="keepAwakeVideo" muted loop playsinline></video>
 <script type="module">
@@ -492,6 +493,27 @@ function setupHost(){ show('hostLobby'); $('hostRoomCode').textContent=roomCode;
 function setupPlayer(){ show('playerLobby'); $('playerRoomCode').textContent=roomCode; status('Čekáš na schválení.'); }
 
 
+
+function updateFreezeOverlay(until){
+  const overlay=$('freezeOverlay');
+  const num=$('freezeNumber');
+  if(!overlay || !num) return;
+  const left=Math.max(0, Math.ceil(((until||0)-Date.now())/1000));
+  if(left>0){
+    num.textContent=left;
+    overlay.classList.remove('hidden');
+  }else{
+    overlay.classList.add('hidden');
+  }
+}
+function hideFreezeOverlay(){
+  const overlay=$('freezeOverlay');
+  if(overlay) overlay.classList.add('hidden');
+}
+function wholeLeftSeconds(until){
+  return Math.max(0, Math.ceil(((until||0)-Date.now())/1000));
+}
+
 function ensureLiveUiTicker(){
   if(liveUiTimer) return;
   liveUiTimer = setInterval(()=>{
@@ -518,10 +540,14 @@ function ensureLiveUiTicker(){
 function renderHost(room){
   updateHostEndButton(room);
   if(room.status==='lobby'){
-    hide('gameScreen'); hide('finishScreen'); hide('centerMsg'); updateHostEndButton(null); show('hostLobby'); fillGameTypeSelect(room.settings?.family || (room.settings?.soloChallenge?'all':'main'));
+    hideFreezeOverlay(); hide('gameScreen'); hide('finishScreen'); hide('centerMsg'); updateHostEndButton(null); show('hostLobby'); fillGameTypeSelect(room.settings?.family || (room.settings?.soloChallenge?'all':'main')); if(room.settings?.timeLimit){ $('timeLimitInput').value=room.settings.timeLimit; $('timeLimitValue').textContent=room.settings.timeLimit; }
     const box=$('hostPlayers'); box.innerHTML='';
     const players=room.players||{};
-    const ids=Object.keys(players).sort((a,b)=>(players[b]?.joinedAt||0)-(players[a]?.joinedAt||0));
+    const ids=Object.keys(players).sort((a,b)=>{
+      const pa=players[a]||{}, pb=players[b]||{};
+      if(!!pa.approved !== !!pb.approved) return pa.approved ? 1 : -1;
+      return (pb.joinedAt||0)-(pa.joinedAt||0);
+    });
     if(!ids.length) box.innerHTML='<p class="small">Zatím tu nejsou žádní hráči.</p>';
     ids.forEach(id=>{
       const p=players[id]; const div=document.createElement('div'); div.className='player';
@@ -578,7 +604,7 @@ async function startGame(){
   const approved=Object.fromEntries(Object.entries(players).filter(([_,p])=>p.approved));
   if(!Object.keys(approved).length) return toast('Nejdřív schval aspoň jednoho hráče.');
   const rounds=Math.max(1,Math.min(100,Number($('roundsInput').value)||20));
-  const timeLimit=Math.max(5,Math.min(60,Number($('timeLimitInput').value)||10));
+  const timeLimit=Math.max(5,Math.min(180,Number($('timeLimitInput').value)||10));
   const gameType=$('gameTypeSelect')?.value || 'classic';
   const family=room.settings?.family || (room.settings?.soloChallenge?'all':'main');
   const hostPlays = family === 'all';
@@ -615,18 +641,32 @@ async function generateNextRound(roundNumber){
   const players=Object.fromEntries(Object.entries(room.players||{}).filter(([_,p])=>p.approved));
   const lastWinnerId = room.game?.lastWinner?.playerId;
   const lastWinnerCard = room.game?.lastWinner?.nextMainCardId;
-  const mainCardId = (lastWinnerId && lastWinnerCard !== undefined && lastWinnerCard !== null) ? lastWinnerCard : Math.floor(Math.random()*CARDS.length);
+  const missed = !!room.game?.lastWinner?.missed;
+  const prevMainCardId = room.currentRound?.mainCardId;
+  let mainCardId;
+  if(lastWinnerId && lastWinnerCard !== undefined && lastWinnerCard !== null){
+    mainCardId = lastWinnerCard;
+  }else{
+    const candidates = CARDS.map((_,i)=>i).filter(i=>i!==prevMainCardId);
+    mainCardId = sample(candidates.length ? candidates : CARDS.map((_,i)=>i));
+  }
+
   const prevCards = room.currentRound?.playerCards || {};
   const playerCards={}, locked={}, newPairs={};
   for(const id of Object.keys(players)){
     let playerCardId = prevCards[id];
-    // Klasika: hráčům, kteří se netrefili, zůstává karta. Novou kartu dostane jen vítěz nebo hráč bez karty.
-    if(playerCardId === undefined || playerCardId === null || id === lastWinnerId || playerCardId === mainCardId){
+
+    // Klasika:
+    // - kdo se netrefil, nechává si spodní kartu;
+    // - když se netrefil nikdo, nechají si spodní kartu všichni;
+    // - novou spodní kartu dostane jen vítěz nebo hráč bez použitelné karty.
+    if(playerCardId === undefined || playerCardId === null || (!missed && id === lastWinnerId) || playerCardId === mainCardId){
       const used=room.game?.usedPairs?.[id]||{};
       const candidates=[];
       for(let c=0;c<CARDS.length;c++) if(c!==mainCardId && !used[`${mainCardId}-${c}`]) candidates.push(c);
       playerCardId=sample(candidates.length?candidates:CARDS.map((_,i)=>i).filter(i=>i!==mainCardId));
     }
+
     playerCards[id]=playerCardId; locked[id]=false; newPairs[`game/usedPairs/${id}/${mainCardId}-${playerCardId}`]=true;
   }
   processedWinnerKey=''; autoAdvancing=false; localLockedRound=-1;
@@ -672,16 +712,17 @@ function handleHostWinner(room){
         name: p.name,
         playerId: pid,
         roundNumber: r.roundNumber,
-        nextMainCardId: pc
+        nextMainCardId: pc,
+        missed: false
       }
     });
 
-    setTimeout(()=>generateNextRound(r.roundNumber + 1),1000);
+    setTimeout(()=>generateNextRound(r.roundNumber + 1),1200);
     return;
   }
 
-  // 2) Všichni schválení hráči klikli špatně, takže už nikdo nemůže hrát.
-  // Teprve potom se na 1 sekundu ukáže smutná hláška a vybere se náhodná další karta.
+  // 2) Všichni schválení hráči klikli špatně.
+  // Zobrazí se hláška, spodní karty všem zůstanou a změní se jen horní karta.
   if(room.status === 'running'){
     const approvedIds = Object.entries(room.players || {})
       .filter(([_, p]) => p.approved)
@@ -705,11 +746,12 @@ function handleHostWinner(room){
         }
       });
 
-      setTimeout(()=>generateNextRound(r.roundNumber + 1),1000);
+      setTimeout(()=>generateNextRound(r.roundNumber + 1),1400);
     }
   }
 }
 function showGameHost(room){
+  hideFreezeOverlay();
   hide('hostLobby'); hide('playerLobby'); hide('finishScreen'); show('gameScreen');
   const hostPlays = !!room.settings?.hostPlays;
   const r = room.currentRound;
@@ -738,6 +780,7 @@ function showGameHost(room){
   showWinnerOverlay(room);
 }
 function showGamePlayer(room,me){
+  hideFreezeOverlay();
   hide('hostLobby'); hide('playerLobby'); hide('finishScreen'); show('gameScreen'); show('scorePanel');
   const r=room.currentRound; const hostPlays = !!room.settings?.hostPlays;
   $('rolePill').textContent=me.name; $('roundPill').textContent=`Kolo ${r?.roundNumber||'?'} / ${r?.total||'?'}`;
@@ -913,9 +956,10 @@ async function generateKahootRound(roundNumber){
     const candidates=CARDS.map((_,i)=>i).filter(i=>i!==mainCardId);
     playerCards[id]=sample(candidates); locked[id]=false;
   }
-  const now=Date.now(); const limit=(room.settings?.timeLimit||10)*1000;
+  const now=Date.now();
+  const roundDurationSec=Math.max(5, Math.min(180, Number(room.settings?.timeLimit)||10));
   processedWinnerKey=''; autoAdvancing=false; localLockedRound=-1; kahootTimerKey='';
-  await update(roomRef,{status:'kahootRunning',currentRound:{roundNumber,total,mainCardId,playerCards,locked,responses:{},startedAt:now,endsAt:now+limit}});
+  await update(roomRef,{status:'kahootRunning',currentRound:{roundNumber,total,mainCardId,playerCards,locked,responses:{},startedAt:now,roundDurationSec,endsAt:now+roundDurationSec*1000}});
 }
 function handleKahootHost(room){
   const r=room.currentRound; if(!r || room.status!=='kahootRunning') return;
@@ -965,7 +1009,7 @@ function renderKahootInstantAnswer(correct, points){
 }
 
 function formatWholeSeconds(ms){
-  return Math.max(0, Math.ceil(ms / 1000));
+  return Math.max(0, Math.floor(ms / 1000));
 }
 
 
@@ -1001,6 +1045,7 @@ function showKahootHost(room){
   renderKahootPanel(room, true);
 }
 function showKahootPlayer(room,me){
+  hideFreezeOverlay();
   hide('hostLobby'); hide('playerLobby'); hide('finishScreen'); hide('centerMsg'); show('gameScreen'); show('scorePanel');
   const r=room.currentRound; const hostPlays=!!room.settings?.hostPlays;
   $('rolePill').textContent=me?.name || 'Hráč';
@@ -1075,7 +1120,9 @@ function renderKahootPanel(room, hostControls=false){
   const r=room.currentRound;
   const responses=r?.responses||{};
   const ranking=getRanking(room);
-  const leftSec=r?.endsAt ? formatWholeSeconds(r.endsAt-Date.now()) : 0;
+  const maxSec=Number(r?.roundDurationSec || room.settings?.timeLimit || 10);
+  const rawLeft=r?.endsAt ? Math.max(0, Math.floor((r.endsAt-Date.now())/1000)) : 0;
+  const leftSec=Math.min(maxSec, rawLeft);
   const meIndex=ranking.findIndex(([id])=>id===playerId);
   const meRow=meIndex>=0 ? ranking[meIndex] : null;
   const gap=meIndex>0 ? Math.max(0,(ranking[meIndex-1][1].score||0)-(ranking[meIndex][1].score||0)) : 0;
@@ -1166,6 +1213,7 @@ function showChallengePlayer(room,me){
   if(hostPlays){ $('gameScreen').classList.add('onlineSplit'); show('onlineMainLabel'); show('onlinePlayerLabel'); show('hostCard'); show('playerCard'); $('hostCard').classList.add('onlineCard'); $('playerCard').classList.add('onlineCard'); renderCard($('hostCard'), room.game?.mainCardId, false, {roundNumber:1}); }
   else{ $('gameScreen').classList.remove('onlineSplit'); hide('onlineMainLabel'); hide('onlinePlayerLabel'); hide('hostCard'); show('playerCard'); }
   const frozen=(me?.frozenUntil||0)>Date.now();
+  updateFreezeOverlay(me?.frozenUntil);
   renderChallengeClickCard($('playerCard'), room, !frozen && room.status==='challengeRunning');
   $('playerCard').classList.toggle('frozen',frozen);
   renderChallengePanel(room, role==='host');
@@ -1200,10 +1248,13 @@ async function challengeOneCardClick(symbol, btnEl, room){
   await update(roomRef,updates);
 }
 function renderChallengePanel(room, hostControls=false){
-  const left=room.game?.endsAt?Math.max(0,(room.game.endsAt-Date.now())/1000):0;
-  let html=`<div class="rank">${room.status==='challengeResult'?'Konec časového limitu':'Zbývá '+left.toFixed(1)+' s'}</div>`;
-  if(room.game?.endsAt) html+=`<div class="timerBar"><div style="width:${Math.max(0,Math.min(100,100*left/(room.settings?.timeLimit||10)))}%"></div></div>`;
-  html += getRanking(room).map(([id,p],i)=>`<div class="player"><div><b>${i+1}. ${esc(p.name)}</b><div class="small">${(p.frozenUntil||0)>Date.now()?'stopka za chybu':'hraje'}</div></div><div class="score">${p.score||0}</div></div>`).join('');
+  const leftSec=room.game?.endsAt ? wholeLeftSeconds(room.game.endsAt) : null;
+  let html=`<div class="rank">${room.status==='challengeResult'?'Konec časového limitu':'Zbývá '+leftSec+' s'}</div>`;
+  html += getRanking(room).map(([id,p],i)=>{
+    const freezeLeft=wholeLeftSeconds(p.frozenUntil);
+    const note=freezeLeft>0 ? `<span style="color:#ef4444;font-weight:950">stopka ${freezeLeft} s</span>` : 'hraje';
+    return `<div class="player"><div><b>${i+1}. ${esc(p.name)}</b><div class="small">${note}</div></div><div class="score">${p.score||0}</div></div>`;
+  }).join('');
   if(room.status==='challengeResult' && hostControls) html+=`<button class="nextBtn" onclick="window.nextDobbleRound()">Ukončit a ukázat pořadí</button>`;
   $('scorePanel').innerHTML=html;
 }
@@ -1250,9 +1301,13 @@ async function finishSoloSpeedMode(room,game){
   await update(ref(db,`rooms/${roomCode}/players/${playerId}`),{score:game.score,soloFinished:true,soloTimeMs:Math.round(game.endTime-game.startTime)});
 }
 function renderSoloSpeedPanel(room,me,game,mode){
-  const ranking=getRanking(room); const place=ranking.findIndex(([id])=>id===playerId)+1; const gap=place>1?((ranking[place-2][1].score||0)-(ranking[place-1][1].score||0)):0;
-  const left=mode==='timeattack'?Math.max(0,(room.game.endsAt-Date.now())/1000):null;
-  $('scorePanel').innerHTML=`<div class="rank">${place>0?place+'. místo':'Hraješ'} · ${game.score} bodů</div><p class="small">${gap>0?'Na soupeře před tebou ztrácíš '+gap+' bodů.':'Jsi průběžně první nebo bez soupeřů.'}</p>${left!==null?`<div class="timerBar"><div style="width:${Math.max(0,Math.min(100,100*left/(room.settings?.timeLimit||10)))}%"></div></div>`:''}${Date.now()<game.frozenUntil?`<p class="small">Stopka ještě ${((game.frozenUntil-Date.now())/1000).toFixed(1)} s</p>`:''}`;
+  const ranking=getRanking(room);
+  const place=ranking.findIndex(([id])=>id===playerId)+1;
+  const gap=place>1?((ranking[place-2][1].score||0)-(ranking[place-1][1].score||0)):0;
+  const left=mode==='timeattack'?wholeLeftSeconds(room.game.endsAt):null;
+  const freezeLeft=wholeLeftSeconds(game.frozenUntil);
+  updateFreezeOverlay(game.frozenUntil);
+  $('scorePanel').innerHTML=`<div class="rank">${place>0?place+'. místo':'Hraješ'} · ${game.score} bodů</div>${left!==null?`<div class="rank">Zbývá ${left} s</div>`:''}<p class="small">${freezeLeft>0?'<span style="color:#ef4444;font-weight:950">Stopka '+freezeLeft+' s</span><br>':''}${gap>0?'Na soupeře před tebou ztrácíš '+gap+' bodů.':'Jsi průběžně první nebo bez soupeřů.'}</p>`;
 }
 
 function getPositions(count){
@@ -1335,6 +1390,7 @@ function showWinnerOverlay(room){
   else hide('centerMsg');
 }
 function renderFinish(room,me=null){
+  hideFreezeOverlay();
   hide('hostLobby'); hide('playerLobby'); hide('gameScreen'); updateHostEndButton(null); show('finishScreen'); hide('centerMsg');
   const players=Object.entries(room.players||{}).filter(([_,p])=>p.approved).sort((a,b)=>{
     const ds=(b[1].score||0)-(a[1].score||0); if(ds) return ds;
