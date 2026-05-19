@@ -224,6 +224,49 @@ function makeDobbleCards(n){
 }
 function commonSymbol(a,b){ return CARDS[a].find(x=>CARDS[b].includes(x)); }
 function show(id){ $(id).classList.remove('hidden'); } function hide(id){ $(id).classList.add('hidden'); }
+
+let cardsAutoScrollTimer = null;
+function isElementActuallyVisible(el){
+  if(!el || el.classList.contains('hidden')) return false;
+  const style = window.getComputedStyle(el);
+  if(style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
+  const rect = el.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+function scheduleCardsIntoView(topCardId='hostCard', bottomCardId='playerCard'){
+  clearTimeout(cardsAutoScrollTimer);
+  cardsAutoScrollTimer = setTimeout(()=>{
+    requestAnimationFrame(()=>scrollCardsIntoView(topCardId, bottomCardId));
+  }, 90);
+}
+function scrollCardsIntoView(topCardId='hostCard', bottomCardId='playerCard'){
+  const topCard = $(topCardId);
+  const bottomCard = $(bottomCardId);
+  if(!isElementActuallyVisible(topCard) || !isElementActuallyVisible(bottomCard)) return;
+
+  const a = topCard.getBoundingClientRect();
+  const b = bottomCard.getBoundingClientRect();
+  const top = Math.min(a.top, b.top);
+  const bottom = Math.max(a.bottom, b.bottom);
+  const margin = 10;
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+  const usableHeight = Math.max(80, viewportHeight - 2 * margin);
+  const cardsHeight = bottom - top;
+
+  let delta = 0;
+  if(cardsHeight > usableHeight){
+    // Když se dvojice bez změny velikosti nevejde úplně, zarovnej aspoň horní kolečko nahoru.
+    delta = top - margin;
+  }else if(top < margin){
+    delta = top - margin;
+  }else if(bottom > viewportHeight - margin){
+    delta = bottom - (viewportHeight - margin);
+  }
+
+  if(Math.abs(delta) > 1){
+    window.scrollBy({top: delta, left: 0, behavior: 'smooth'});
+  }
+}
 function toast(t){ $('toast').textContent=t; show('toast'); setTimeout(()=>hide('toast'),1800); }
 function status(t){ const el=$('statusText'); if(el) el.textContent=t; }
 function cleanRoom(v){ return (v||'').replace(/\D/g,'').slice(0,5); }
@@ -339,6 +382,7 @@ function renderOfflineRound(){
   $('offlineScorePill').textContent = `Body ${offlineGame.score}`;
   renderOfflineMainCard($('offlineMainCard'), r.mainCardId);
   renderOfflinePlayerCard($('offlinePlayerCard'), r);
+  scheduleCardsIntoView('offlineMainCard', 'offlinePlayerCard');
 }
 function renderOfflineMainCard(el, cardId){
   el.innerHTML='';
@@ -784,7 +828,7 @@ function showGameHost(room){
     const locked = !!r?.locked?.[playerId] || room.status === 'roundResult';
     renderCard($('playerCard'), myCard, !locked, r);
     $('playerCard').classList.toggle('disabled',locked);
-    setTimeout(()=>$('gameScreen').scrollIntoView({block:'center',behavior:'smooth'}),80);
+    scheduleCardsIntoView();
     const me = room.players?.[playerId] || {};
     $('scorePanel').innerHTML=`<div class="rank">Body: ${me.score||0}</div><div class="small">${locked?'V tomto kole už nemůžeš klikat.':'Najdi společné emoji se společnou kartou.'}</div>`;
   }else{
@@ -815,7 +859,7 @@ function showGamePlayer(room,me){
   }
   renderCard($('playerCard'), myCard, !locked, r);
   $('playerCard').classList.toggle('disabled',locked);
-  if(hostPlays) setTimeout(()=>$('gameScreen').scrollIntoView({block:'center',behavior:'smooth'}),80);
+  if(hostPlays) scheduleCardsIntoView();
   $('scorePanel').innerHTML=`<div class="rank">Body: ${me.score||0}</div><div class="small">${locked?'V tomto kole už nemůžeš klikat.':'Najdi společné emoji se společnou kartou.'}</div>`;
   showWinnerOverlay(room);
 }
@@ -855,6 +899,7 @@ function showSoloChallenge(room, me){
     $('playerCard').classList.add('disabled');
   }
   renderSoloScorePanel(room, me);
+  scheduleCardsIntoView();
 }
 function renderOnlineSoloPlayerCard(el, round){
   el.innerHTML='';
@@ -1104,6 +1149,7 @@ function showKahootPlayer(room,me){
 
   renderKahootPlayerCard($('playerCard'), r, room.status==='kahootRunning');
   $('playerCard').classList.remove('disabled');
+  if(hostPlays) scheduleCardsIntoView();
   renderKahootPanel(room, role==='host');
 }
 function renderKahootPlayerCard(el, round, clickable){
@@ -1263,6 +1309,7 @@ function showChallengePlayer(room,me){
   updateFreezeOverlay(me?.frozenUntil);
   renderChallengeClickCard($('playerCard'), room, !frozen && room.status==='challengeRunning');
   $('playerCard').classList.toggle('frozen',frozen);
+  if(hostPlays) scheduleCardsIntoView();
   renderChallengePanel(room, role==='host');
 }
 function renderChallengeClickCard(el, room, clickable){
@@ -1346,6 +1393,7 @@ function showSoloSpeedMode(room,me,mode){
   renderSoloSpeedPlayerCard($('playerCard'), r, nowMs()>=game.frozenUntil);
   $('playerCard').classList.toggle('frozen',nowMs()<game.frozenUntil);
   renderSoloSpeedPanel(room,me,game,mode);
+  scheduleCardsIntoView();
 }
 function renderSoloSpeedPlayerCard(el, round, clickable){
   el.innerHTML=''; if(!round) return;
