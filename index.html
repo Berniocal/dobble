@@ -305,6 +305,7 @@ function makeOfflineRounds(seedText, rounds){
   return out;
 }
 async function startOfflineGame(){
+  resetTwoCardAutoScroll();
   await enableWake();
   const seed = ($('offlineSeedInput').value||'').replace(/\D/g,'').slice(0,7);
   if(seed.length!==7) return toast('Zadej 7 číslic seedu.');
@@ -339,6 +340,7 @@ function renderOfflineRound(){
   $('offlineScorePill').textContent = `Body ${offlineGame.score}`;
   renderOfflineMainCard($('offlineMainCard'), r.mainCardId);
   renderOfflinePlayerCard($('offlinePlayerCard'), r);
+  autoFitTwoCards('offlineMainCard','offlinePlayerCard',`offline-${r.roundNumber}`);
 }
 function renderOfflineMainCard(el, cardId){
   el.innerHTML='';
@@ -531,6 +533,55 @@ function wholeLeftSeconds(until){
   return Math.max(0, Math.ceil(((until||0)-nowMs())/1000));
 }
 
+let lastTwoCardAutoScrollKey = '';
+
+function resetTwoCardAutoScroll(){
+  lastTwoCardAutoScrollKey = '';
+}
+
+function autoFitTwoCards(topCardId, bottomCardId, key=''){
+  const topCard = $(topCardId);
+  const bottomCard = $(bottomCardId);
+  if(!topCard || !bottomCard) return;
+  if(topCard.classList.contains('hidden') || bottomCard.classList.contains('hidden')) return;
+
+  const finalKey = `${key}|${topCardId}|${bottomCardId}|${window.innerWidth}x${window.innerHeight}`;
+  if(lastTwoCardAutoScrollKey === finalKey) return;
+  lastTwoCardAutoScrollKey = finalKey;
+
+  const fitNow = () => {
+    const a = topCard.getBoundingClientRect();
+    const b = bottomCard.getBoundingClientRect();
+    if(!a.width || !a.height || !b.width || !b.height) return;
+
+    const margin = 6;
+    const vv = window.visualViewport;
+    const viewTop = vv ? vv.offsetTop + margin : margin;
+    const viewBottom = vv ? vv.offsetTop + vv.height - margin : window.innerHeight - margin;
+
+    const top = Math.min(a.top, b.top);
+    const bottom = Math.max(a.bottom, b.bottom);
+    const pairHeight = bottom - top;
+    const available = viewBottom - viewTop;
+
+    let dy = 0;
+
+    if(pairHeight <= available){
+      if(top < viewTop) dy = top - viewTop;
+      else if(bottom > viewBottom) dy = bottom - viewBottom;
+    }else{
+      dy = top - viewTop;
+    }
+
+    if(Math.abs(dy) > 1){
+      window.scrollBy({top: dy, left: 0, behavior: 'auto'});
+    }
+  };
+
+  requestAnimationFrame(fitNow);
+  setTimeout(fitNow, 35);
+}
+
 function ensureLiveUiTicker(){
   if(liveUiTimer) return;
   liveUiTimer = setInterval(()=>{
@@ -617,6 +668,7 @@ async function forceFinishGame(){
 }
 
 async function startGame(){
+  resetTwoCardAutoScroll();
   const snap=await get(roomRef); const room=snap.val(); const players=room.players||{};
   const approved=Object.fromEntries(Object.entries(players).filter(([_,p])=>p.approved));
   if(!Object.keys(approved).length) return toast('Nejdřív schval aspoň jednoho hráče.');
@@ -784,7 +836,7 @@ function showGameHost(room){
     const locked = !!r?.locked?.[playerId] || room.status === 'roundResult';
     renderCard($('playerCard'), myCard, !locked, r);
     $('playerCard').classList.toggle('disabled',locked);
-    setTimeout(()=>$('gameScreen').scrollIntoView({block:'center',behavior:'smooth'}),80);
+    autoFitTwoCards('hostCard','playerCard',`classic-host-${r?.roundNumber||0}-${room.status}`);
     const me = room.players?.[playerId] || {};
     $('scorePanel').innerHTML=`<div class="rank">Body: ${me.score||0}</div><div class="small">${locked?'V tomto kole už nemůžeš klikat.':'Najdi společné emoji se společnou kartou.'}</div>`;
   }else{
@@ -815,7 +867,7 @@ function showGamePlayer(room,me){
   }
   renderCard($('playerCard'), myCard, !locked, r);
   $('playerCard').classList.toggle('disabled',locked);
-  if(hostPlays) setTimeout(()=>$('gameScreen').scrollIntoView({block:'center',behavior:'smooth'}),80);
+  if(hostPlays)
   $('scorePanel').innerHTML=`<div class="rank">Body: ${me.score||0}</div><div class="small">${locked?'V tomto kole už nemůžeš klikat.':'Najdi společné emoji se společnou kartou.'}</div>`;
   showWinnerOverlay(room);
 }
@@ -855,6 +907,7 @@ function showSoloChallenge(room, me){
     $('playerCard').classList.add('disabled');
   }
   renderSoloScorePanel(room, me);
+  autoFitTwoCards('hostCard','playerCard',`solo-${game?.current||0}-${room.status}`);
 }
 function renderOnlineSoloPlayerCard(el, round){
   el.innerHTML='';
@@ -1105,6 +1158,7 @@ function showKahootPlayer(room,me){
   renderKahootPlayerCard($('playerCard'), r, room.status==='kahootRunning');
   $('playerCard').classList.remove('disabled');
   renderKahootPanel(room, role==='host');
+  if(hostPlays) autoFitTwoCards('hostCard','playerCard',`kahoot-${r?.roundNumber||0}-${room.status}`);
 }
 function renderKahootPlayerCard(el, round, clickable){
   if(!round) { el.innerHTML=''; delete el.dataset.kahootCardKey; return; }
@@ -1264,6 +1318,7 @@ function showChallengePlayer(room,me){
   renderChallengeClickCard($('playerCard'), room, !frozen && room.status==='challengeRunning');
   $('playerCard').classList.toggle('frozen',frozen);
   renderChallengePanel(room, role==='host');
+  if(hostPlays) autoFitTwoCards('hostCard','playerCard',`onecard-${room.status}`);
 }
 function renderChallengeClickCard(el, room, clickable){
   el.innerHTML=''; const cardId=room.game?.playerCards?.[playerId]; if(cardId===undefined) return;
@@ -1346,6 +1401,7 @@ function showSoloSpeedMode(room,me,mode){
   renderSoloSpeedPlayerCard($('playerCard'), r, nowMs()>=game.frozenUntil);
   $('playerCard').classList.toggle('frozen',nowMs()<game.frozenUntil);
   renderSoloSpeedPanel(room,me,game,mode);
+  autoFitTwoCards('hostCard','playerCard',`${mode}-${game.current}-${room.status}`);
 }
 function renderSoloSpeedPlayerCard(el, round, clickable){
   el.innerHTML=''; if(!round) return;
